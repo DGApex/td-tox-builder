@@ -1,0 +1,39 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.11", "3.13"]
+    defaults:
+      run:
+        working-directory: td-tox-builder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Preflight helpers
+        run: python check_td_preflight.py
+      - name: Namespace handoffs (G26)
+        run: python check_td_namespace.py templates/build_tox_template.py
+      - name: Blend menu IDs (G27)
+        run: python check_td_menu_ids.py templates/build_tox_template.py
+      - name: Compile all Python
+        run: python -m py_compile check_*.py templates/*.py
+      - name: PowerShell template is ASCII-only (G5)
+        run: |
+          python - <<'EOF'
+          import sys
+          data = open('templates/setup_template.ps1', 'rb').read()
+          bad = [i for i, b in enumerate(data) if b > 127]
+          if bad:
+              sys.exit('non-ASCII bytes at offsets %s' % bad[:10])
+          print('PASS setup_template.ps1 is ASCII-only')
+          EOF
